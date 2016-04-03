@@ -3,9 +3,13 @@ package com.m2mci.mqttKafkaBridge;
 import java.util.Properties;
 
 import kafka.javaapi.producer.Producer;
-import kafka.javaapi.producer.ProducerData;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 import kafka.message.Message;
+import kafka.producer.KeyedMessage;
 import kafka.producer.ProducerConfig;
+import sun.security.krb5.internal.util.KerberosString;
 
 import org.apache.log4j.Logger;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
@@ -19,17 +23,19 @@ import org.kohsuke.args4j.CmdLineException;
 public class Bridge implements MqttCallback {
 	private Logger logger = Logger.getLogger(this.getClass().getName());
 	private MqttAsyncClient mqtt;
-	private Producer<String, Message> kafkaProducer;
+	private Producer<String, String> kafkaProducer;
+	private String topicName = "Collares";
 	
 	private void connect(String serverURI, String clientId, String zkConnect) throws MqttException {
 		mqtt = new MqttAsyncClient(serverURI, clientId);
 		mqtt.setCallback(this);
 		IMqttToken token = mqtt.connect();
 		Properties props = new Properties();
-		props.put("zk.connect", zkConnect);
-		props.put("serializer.class", "kafka.serializer.DefaultEncoder");
+		props.put("metadata.broker.list", "broker1:9092,broker2:9092");
+		props.put("serializer.class", "kafka.serializer.StringEncoder");
+		props.put("request.required.acks", "1");
 		ProducerConfig config = new ProducerConfig(props);
-		kafkaProducer = new Producer<String, Message>(config);
+		kafkaProducer = new Producer<String, String>(config);
 		token.waitForCompletion();
 		logger.info("Connected to MQTT and Kafka");
 	}
@@ -75,7 +81,8 @@ public class Bridge implements MqttCallback {
 	@Override
 	public void messageArrived(String topic, MqttMessage message) throws Exception {
 		byte[] payload = message.getPayload();
-		ProducerData<String, Message> data = new ProducerData<String, Message>(topic, new Message(payload));
+		JSONArray a = new JSONArray(new String(payload));
+		KeyedMessage<String, String> data = new KeyedMessage<String, String>(topicName,a.toString());
 		kafkaProducer.send(data);
 	}
 
